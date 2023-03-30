@@ -1,95 +1,112 @@
 import psycopg2
-import pprint
 
-def create_db(conn):
-        cur.execute("""
-        DROP TABLE IF EXISTS Phone;
-        DROP TABLE IF EXISTS Client;
-        """)
+with psycopg2.connect(database='clients_db', user='postgres', password='postgres') as connect:
 
-        cur.execute("""
-                CREATE TABLE IF NOT EXISTS Client(
-                client_id SERIAL PRIMARY KEY,
-                name VARCHAR(60) NOT NULL,
-                surname VARCHAR(60) NOT NULL,
-                e_mail VARCHAR(60) NOT NULL UNIQUE);
-                """)
-
-        cur.execute("""
-                CREATE TABLE IF NOT EXISTS Phone(
-                number DECIMAL UNIQUE CHECK(number <= 99999999999),
-                client_id INTEGER REFERENCES Client(client_id));
-                """)
-        conn.commit()
-
-
-def add_client(conn, name, surname, e_mail, phones=None):
-    cur.execute("""
-            INSERT INTO Client(name, surname, e_mail)
-            VALUES(%s, %s, %s)
-            RETURNING client_id, name, surname, e_mail;
-            """, (name, surname, e_mail))
-    conn.commit()
-
-def add_phone(conn, client_id, number):
-        cur.execute("""
-                INSERT INTO Phone(client_id, number)
-                VALUES(client_id, number)
-                RETURNING client_id, name, surname, e_mail
-                """), (client_id, number)
-        print(cur.fetchone())
-
-
-def change_client(conn, client_id, name=None, surname=None, e_mail=None, number=None):
-    conn.execute("""
-        UPDATE Client
-        SET name=%s, surname=%s, e_mail=%s
-        WHERE client_id=%s
-        RETURNING client_id, name, surname, e_mail;
-        """, (name, surname, e_mail, client_id))
-
-    conn.execute("""
-        UPDATE Phone
-        SET number=%s
-        WHERE client_id=%s
-        RETURNING client_id, number;
-        """, (number, client_id))
-
-def delete_phone(conn, client_id, number):
-
-    cur.execute("""DELETE FROM Phone
-            WHERE client_id=%s;
-            """, (client_id,))
-    print(cur.fetchall())
-
-def delete_client(conn, client_id):
-    cur.execute("""DELETE FROM Client
-            WHERE client_id=%s;
-            """, (client_id,))
-    print(cur.fetchall())
-
-def find_client(cur, name=None, surname=None, e_mail=None, number=None):
-    if name is not None:
-        cur.execute("""
-                    SELECT c.client_id, c.first_name, c.last_name, c.email, p.phone FROM clients AS c
-                    LEFT JOIN phones AS p ON c.client_id = p.client_id
-                    WHERE c.first_name LIKE %s""", (name,))
-        pprint(cur.fetchall())
-
-
-
-
-
-
-with psycopg2.connect(database="clients_db", user="postgres", password="postgres") as conn:
-    if __name__ =="__main__":
+    def drop_table(conn):
         with conn.cursor() as cur:
-            print(create_db(conn))
-            print(add_client(conn, 'Murz', 'Bulkin', 'murz@mail.ru', '89999999999'))
-            print(add_phone(conn, '1', '89999999997'))
-            print(change_client(conn, '1', 'Kuzya', 'Murzikov', 'kuziaa@mail.ru', '89999999998'))
-            print(delete_phone(conn, '1', '89999999998'))
-            print(delete_client(conn, '1'))
-            print(find_client(conn, 'Murz'))
+            cur.execute('''
+            DROP table phone_db;
+            DROP table client_db;
+            ''')
 
-        conn.close()
+    def create_db(conn):
+        with conn.cursor() as cur:
+            cur.execute('''
+            CREATE TABLE IF NOT EXISTS client_db (
+            client_id SERIAL PRIMARY KEY, 
+            name VARCHAR (30) NOT NULL,
+            surname VARCHAR (30) NOT NULL,
+            email VARCHAR (40) UNIQUE
+            );
+            ''')
+
+    def create_phone_db(conn):
+        with conn.cursor() as cur:
+            cur.execute('''
+            CREATE TABLE IF NOT EXISTS phone_db (
+            phone_id BIGINT,
+            client_id INTEGER NOT NULL REFERENCES client_db(client_id)
+            );
+            ''')
+
+    def add_client(conn, name, surname, email):
+        with conn.cursor() as cur:
+            cur.execute('''
+            INSERT INTO client_db (name, surname, email) VALUES (%s, %s, %s);
+            ''', (name, surname, email,))
+
+    def add_phone(conn, client_id, phone_id=None):
+        with conn.cursor() as cur:
+            cur.execute('''
+            INSERT INTO phone_db (client_id, phone_id) VALUES (%s, %s);''', (client_id, phone_id,))
+
+    def data_update(conn, client_id, name=None, surname=None, email=None):
+        with conn.cursor() as cur:
+            if name is not None:
+                cur.execute('''
+                UPDATE client_db SET name = %s
+                WHERE client_id = %s''',
+                            (name, client_id))
+            if surname is not None:
+                cur.execute('''
+                UPDATE client_db SET surname = %s
+                WHERE client_id = %s''',
+                            (surname, client_id))
+            if email is not None:
+                cur.execute('''
+                UPDATE client_db SET email = %s
+                WHERE client_id = %s''',
+                            (email, client_id))
+
+    def phone_delete(conn, client_id, phone_id):
+        with conn.cursor() as cur:
+            cur.execute('''
+            UPDATE phone_db SET phone_id = NULL
+            WHERE client_id = %s AND phone_id = %s;''', (client_id, phone_id,))
+
+    def delete_client(conn, client_id):
+        with conn.cursor() as cur:
+            cur.execute('''
+            DELETE FROM phone_db WHERE client_id = %s;
+            DELETE FROM client_db WHERE client_id = %s;''', (client_id, client_id,))
+
+    def find_client(conn, phone_id=None, name=None, surname=None, email=None):
+        with conn.cursor() as cur:
+            if phone_id is not None:
+                cur.execute('''
+                SELECT client_id FROM phone_db WHERE phone_id=%s;''',
+                            (phone_id,))
+                print(cur.fetchone())
+            if name is not None:
+                cur.execute('''
+                SELECT client_id FROM client_db WHERE name=%s;''',
+                            (name,))
+                print(cur.fetchone())
+            if surname is not None:
+                cur.execute('''
+                SELECT client_id FROM client_db WHERE surname=%s;''',
+                            (surname,))
+                print(cur.fetchone())
+            if email is not None:
+                cur.execute('''
+                SELECT client_id FROM client_db WHERE email=%s;''',
+                            (email,))
+                print(cur.fetchone())
+
+if __name__ == "main":
+    drop_table(connect)
+    create_db(connect)
+    create_phone_db(connect)
+    add_client(connect, 'Meow', 'Cat', 'meow@gmail.ru')
+    add_client(connect, 'Tommy', 'Cash', 'tc@mail.ru')
+    add_client(connect, 'Murzik', 'Bulkin', 'miachick@mail.com')
+    add_client(connect, 'Harry', 'Potter', 'Harry@ya.ru')
+    add_phone(connect, 1, 89772542356)
+    add_phone(connect, 1, 89772544002)
+    add_phone(connect, 2, 89771000200)
+    add_phone(connect, 3, 89772542350)
+    data_update(connect, 2, name='Henry', surname='Sausage')
+    phone_delete(connect, 1, 89772542356)
+    # delete_client(connect, 3)
+    find_client(connect, name='Murzik')
+    find_client(connect, phone_id=89771000200)
