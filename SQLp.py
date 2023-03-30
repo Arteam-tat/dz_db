@@ -93,7 +93,7 @@ with psycopg2.connect(database='clients_db', user='postgres', password='postgres
                             (email,))
                 print(cur.fetchone())
 
-if __name__ == "main":
+if __name__ == "__main__":
     drop_table(connect)
     create_db(connect)
     create_phone_db(connect)
